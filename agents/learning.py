@@ -1,8 +1,7 @@
 """
 Autonomous Bayesian Calibration & Active Learning Feedback Engine for radiology-vqa-multimodal-agent.
 """
-import math
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List
 from pydantic import BaseModel, Field
 
 class WorkerPerformanceMetric(BaseModel):

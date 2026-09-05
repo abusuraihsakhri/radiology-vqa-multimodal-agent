@@ -3,8 +3,7 @@ Core Algorithmic Engine & Cryptographic / Biological Logic for RadVQA-Sentinel: 
 Domain: Medical Multimodal AI
 Standard: VQA-Med / ImageCLEFmed Standards
 """
-import math
-from typing import Dict, Any, List, Optional
+from typing import Any, Dict, Optional
 from .models import FrontierPayload, AgentTelemetryAlert, ExecutionStatus
 
 

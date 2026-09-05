@@ -4,8 +4,8 @@ Domain: Radiology & Neuroimaging Systems
 Standard: ACR RADS / Fleischner Society / ASPECTS Guidelines
 """
 import uuid
-from typing import Dict, Any, List, Optional
-from .models import SystemTaskPayload, AgentAlert, UrgencyLevel, SystemIntegrityStatus
+from typing import List
+from .models import SystemTaskPayload, AgentAlert, UrgencyLevel
 
 
 class InvariantQCWorker:

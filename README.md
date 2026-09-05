@@ -68,7 +68,10 @@ python cli.py --task-id <value> --target <value> --primary <value> --secondary <
 ## 🛡️ Security & Enterprise Architecture
 
 * **Zero-PHI Outbound Interceptor:** Active AST and regex inspection blocking SSNs, MRNs, phone numbers, and patient identifiers.
-* **Tamper-Evident HMAC-SHA256 Audit Trail:** Chained, cryptographically signed logs for every evaluation and state transition.
+* **Tamper-Evident HMAC-SHA256 Audit Trail:** Chained, cryptographically signed logs for every evaluation and state transition. Full signature verification on integrity checks.
+* **Secure Key Management:** HMAC secret key sourced from `AUDIT_SECRET_KEY` environment variable, with auto-generated secure random fallback for development.
+* **Input Validation:** All metric values validated for finite numbers (rejects NaN/Inf). String fields validated as non-empty.
+* **Error Resilience:** Batch processing handles file errors, permission issues, and malformed CSV data gracefully.
 * **Air-Gapped LLM Reasoning Adapter:** Agnostic integration for local Ollama instances (`llama3`, `mistral`), Claude 3.5 Sonnet, GPT-4o, and deterministic test mocks.
 * **Active Learning Bayesian Calibration:** Dynamic tracker updating worker reliability weights and monitoring Brier calibration drift.
 * **FastAPI & Prometheus Telemetry:** Exposes OpenAPI 3.1 REST endpoints and operational Prometheus metrics (`/metrics`).
@@ -86,7 +89,13 @@ pytest -v
 Execute high-throughput batch simulation benchmarks:
 
 ```bash
-python simulator.py --tasks 1000 --concurrency 8
+python simulator.py 1000
+```
+
+Run batch processing from CSV:
+
+```bash
+python cli.py batch -i sample.csv -o results.csv
 ```
 
 ---
@@ -97,3 +106,14 @@ python simulator.py --tasks 1000 --concurrency 8
 docker build -t radiology-vqa-multimodal-agent .
 docker run -p 8000:8000 radiology-vqa-multimodal-agent
 ```
+
+---
+
+## 🔧 Configuration
+
+| Environment Variable | Description | Default |
+|:---------------------|:------------|:--------|
+| `AUDIT_SECRET_KEY` | HMAC-SHA256 secret key for audit trail signing | Auto-generated secure random key per process |
+| `MODEL_PROVIDER` | LLM provider (`mock`, `ollama`, `claude`, `openai`) | `mock` |
+
+**Security Note:** For production deployments, always set `AUDIT_SECRET_KEY` to a strong, unique value. Without it, a secure random key is generated per process (suitable for development/testing).

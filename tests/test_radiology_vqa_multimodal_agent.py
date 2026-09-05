@@ -4,11 +4,12 @@ Domain: Radiology & Neuroimaging Systems
 Standard: ACR RADS / Fleischner Society / ASPECTS Guidelines
 """
 import sys
+import math
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import pytest
-from agents.base import PHIGuard, AuditLogger, SecurityException
+from agents.base import PHIGuard, AuditLogger, AuditTrail, SecurityException
 from agents.models import SystemTaskPayload, UrgencyLevel, SystemIntegrityStatus
 from agents.workers import InvariantQCWorker, SafetyEscalationWorker, ProtocolConformanceWorker
 from agents.supervisor import SystemSupervisor
@@ -63,3 +64,37 @@ def test_supervisor_consensus_and_audit():
     assert main(["audit", "--task-id", "CLI-TEST-01"]) == 0
     assert main(["chat", "Explain", "specifications"]) == 0
     assert main(["verify-audit"]) == 0
+
+
+def test_input_validation_rejects_nan():
+    with pytest.raises(ValueError, match="finite"):
+        SystemTaskPayload(task_id="T1", target_identifier="KEY-01", primary_metric=float("nan"))
+
+
+def test_input_validation_rejects_inf():
+    with pytest.raises(ValueError, match="finite"):
+        SystemTaskPayload(task_id="T1", target_identifier="KEY-01", primary_metric=float("inf"))
+
+
+def test_input_validation_rejects_empty_strings():
+    with pytest.raises(ValueError, match="non-empty"):
+        SystemTaskPayload(task_id="", target_identifier="KEY-01", primary_metric=10.0)
+
+
+def test_audit_trail_integrity_verification():
+    trail = AuditTrail(secret_key="test-key-for-integrity-verification")
+    trail.log("test-actor", "test-tier", "TEST_EVENT", {"data": "value1"})
+    trail.log("test-actor", "test-tier", "TEST_EVENT", {"data": "value2"})
+    assert trail.verify_integrity() is True
+
+
+def test_audit_trail_detects_tampering():
+    trail = AuditTrail(secret_key="test-key-for-tamper-detection")
+    trail.log("test-actor", "test-tier", "TEST_EVENT", {"data": "original"})
+    # Tamper with the logged data
+    trail.logs[0]["payload_hash"] = "tampered_hash_value"
+    assert trail.verify_integrity() is False
+
+
+def test_batch_file_not_found():
+    assert main(["batch", "-i", "nonexistent_file_xyz.csv"]) == 1
