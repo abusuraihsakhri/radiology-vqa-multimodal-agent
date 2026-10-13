@@ -1,7 +1,7 @@
 """
 Pydantic v2 schemas and data definitions for Radiology Vqa Multimodal Agent.
 Domain: Radiology & Neuroimaging Systems
-Standard: ACR RADS / Fleischner Society / ASPECTS Guidelines
+Standard: Illustrative thresholds only (not clinically validated)
 """
 import datetime
 import math
@@ -54,7 +54,7 @@ class AgentAlert(BaseModel):
     summary: str
     technical_details: str
     actionable_remediation: str
-    standard_reference: str = "ACR RADS / Fleischner Society / ASPECTS Guidelines"
+    standard_reference: str = "Illustrative rule thresholds (not clinically validated)"
     timestamp: str = Field(default_factory=lambda: datetime.datetime.now(datetime.timezone.utc).isoformat())
 
     def to_dict(self) -> Dict[str, Any]:
@@ -72,7 +72,7 @@ class ConsensusDossier(BaseModel):
     total_alerts: int
     critical_alerts_count: int
     alerts: List[AgentAlert]
-    standard_reference: str = "ACR RADS / Fleischner Society / ASPECTS Guidelines"
+    standard_reference: str = "Illustrative rule thresholds (not clinically validated)"
     consensus_summary: str
     audit_hash: str
     timestamp: str = Field(default_factory=lambda: datetime.datetime.now(datetime.timezone.utc).isoformat())

@@ -5,9 +5,10 @@ import argparse
 import csv
 import json
 import sys
+from pathlib import Path
 from agents.models import SystemTaskPayload
 from agents.supervisor import SystemSupervisor
-from agents.base import AuditLogger
+from agents.base import AuditLogger, SecurityException
 
 supervisor = SystemSupervisor(model_provider="mock")
 
@@ -56,7 +57,7 @@ def main(argv=None):
         dossier = supervisor.process_task(payload)
         print("=" * 80)
         print(f"  RADIOLOGY VQA MULTIMODAL AGENT")
-        print(f"  Domain: Radiology & Neuroimaging Systems | Standard: ACR RADS / Fleischner Society / ASPECTS Guidelines")
+        print(f"  Domain: Synthetic rule evaluation | Standard: Illustrative thresholds only")
         print(f"  Dossier ID: {dossier.dossier_id} | Urgency: [{dossier.overall_urgency.value}]")
         print("=" * 80)
         for a in dossier.alerts:
@@ -77,9 +78,12 @@ def main(argv=None):
         trail = AuditLogger.get_trail()
         valid = AuditLogger.verify_integrity()
         print(f"Audit Trail Blocks: {len(trail)} | Cryptographic Integrity Verified: {valid}")
-        return 0
+        return 0 if valid else 1
 
     if args.command == "batch":
+        if Path(args.input).resolve() == Path(args.output).resolve():
+            print("Error: Input and output paths must differ.", file=sys.stderr)
+            return 1
         try:
             with open(args.input, mode="r", encoding="utf-8-sig") as f:
                 reader = csv.DictReader(f)
@@ -91,22 +95,37 @@ def main(argv=None):
         except PermissionError:
             print(f"Error: Permission denied reading '{args.input}'.", file=sys.stderr)
             return 1
-        except csv.Error as e:
+        except (csv.Error, UnicodeError, IsADirectoryError) as e:
             print(f"Error: Malformed CSV in '{args.input}': {e}", file=sys.stderr)
             return 1
 
-        out_fields = fieldnames + ["overall_urgency", "integrity_status", "total_alerts", "audit_hash"]
+        if not fieldnames or any(not key for key in fieldnames):
+            print("Error: CSV must have nonempty column headers.", file=sys.stderr)
+            return 1
+        if len(fieldnames) != len(set(fieldnames)):
+            print("Error: Duplicate CSV column headers are not supported.", file=sys.stderr)
+            return 1
+        required = {"task_id", "target_identifier", "primary_metric"}
+        if not required.issubset(fieldnames):
+            print(f"Error: Missing required CSV columns: {', '.join(sorted(required - set(fieldnames)))}.", file=sys.stderr)
+            return 1
+        out_fields = list(dict.fromkeys(fieldnames + ["overall_urgency", "integrity_status", "total_alerts", "audit_hash"]))
         out_rows = []
         errors = 0
         for idx, r in enumerate(rows):
             try:
+                if None in r:
+                    raise ValueError("Too many columns in CSV row")
+                critical_value = str(r.get("is_critical_flag", "")).strip().lower()
+                if critical_value not in ("true", "false", "1", "0", "yes", "no", ""):
+                    raise ValueError("Invalid is_critical_flag; expected true/false, 1/0, or yes/no")
                 payload = SystemTaskPayload(
                     task_id=r.get("task_id", "TASK-01"),
                     target_identifier=r.get("target_identifier", "TARGET-01"),
                     primary_metric=float(r.get("primary_metric", 15.0)),
                     secondary_metric=float(r.get("secondary_metric", 5.0)),
                     status_descriptor=r.get("status_descriptor", "NOMINAL"),
-                    is_critical_flag=str(r.get("is_critical_flag", "")).lower() in ("true", "1", "yes"),
+                    is_critical_flag=critical_value in ("true", "1", "yes"),
                 )
                 dossier = supervisor.process_task(payload)
                 row_dict = dict(r)
@@ -115,7 +134,7 @@ def main(argv=None):
                 row_dict["total_alerts"] = dossier.total_alerts
                 row_dict["audit_hash"] = dossier.audit_hash
                 out_rows.append(row_dict)
-            except (ValueError, TypeError) as e:
+            except (ValueError, TypeError, SecurityException) as e:
                 print(f"Warning: Skipping row {idx + 1}: {e}", file=sys.stderr)
                 errors += 1
 
@@ -124,8 +143,8 @@ def main(argv=None):
                 writer = csv.DictWriter(f, fieldnames=out_fields)
                 writer.writeheader()
                 writer.writerows(out_rows)
-        except PermissionError:
-            print(f"Error: Permission denied writing '{args.output}'.", file=sys.stderr)
+        except (PermissionError, IsADirectoryError, OSError) as e:
+            print(f"Error: Could not write '{args.output}': {e}", file=sys.stderr)
             return 1
 
         print(f"Processed {len(out_rows)} records -> {args.output} ({errors} skipped)")
