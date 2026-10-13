@@ -92,3 +92,24 @@ def test_audit_verification_failure_returns_nonzero(monkeypatch):
     from cli import AuditLogger
     monkeypatch.setattr(AuditLogger, "verify_integrity", lambda: False)
     assert main(["verify-audit"]) == 1
+
+
+def test_batch_skips_recognizable_identifiers(tmp_path):
+    source = tmp_path / "phi.csv"
+    source.write_text(
+        "task_id,target_identifier,primary_metric,secondary_metric,is_critical_flag\n"
+        "SAFE,SYNTHETIC-01,2,1,no\n"
+        "UNSAFE,private@example.com,2,1,no\n", encoding="utf-8"
+    )
+    destination = tmp_path / "results.csv"
+    assert main(["batch", "-i", str(source), "-o", str(destination)]) == 0
+    with destination.open(encoding="utf-8", newline="") as handle:
+        data = list(csv.DictReader(handle))
+    assert len(data) == 1
+    assert data[0]["task_id"] == "SAFE"
+
+
+def test_simulator_rejects_nonpositive_iterations():
+    from simulator import run_simulation
+    with pytest.raises(ValueError, match="positive"):
+        run_simulation(0)
