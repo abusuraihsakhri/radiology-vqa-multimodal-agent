@@ -77,7 +77,7 @@ def main(argv=None):
         trail = AuditLogger.get_trail()
         valid = AuditLogger.verify_integrity()
         print(f"Audit Trail Blocks: {len(trail)} | Cryptographic Integrity Verified: {valid}")
-        return 0
+        return 0 if valid else 1
 
     if args.command == "batch":
         try:
@@ -91,22 +91,34 @@ def main(argv=None):
         except PermissionError:
             print(f"Error: Permission denied reading '{args.input}'.", file=sys.stderr)
             return 1
-        except csv.Error as e:
+        except (csv.Error, UnicodeError, IsADirectoryError) as e:
             print(f"Error: Malformed CSV in '{args.input}': {e}", file=sys.stderr)
             return 1
 
-        out_fields = fieldnames + ["overall_urgency", "integrity_status", "total_alerts", "audit_hash"]
+        if not fieldnames or any(not key for key in fieldnames):
+            print("Error: CSV must have nonempty column headers.", file=sys.stderr)
+            return 1
+        required = {"task_id", "target_identifier", "primary_metric"}
+        if not required.issubset(fieldnames):
+            print(f"Error: Missing required CSV columns: {', '.join(sorted(required - set(fieldnames)))}.", file=sys.stderr)
+            return 1
+        out_fields = list(dict.fromkeys(fieldnames + ["overall_urgency", "integrity_status", "total_alerts", "audit_hash"]))
         out_rows = []
         errors = 0
         for idx, r in enumerate(rows):
             try:
+                if None in r:
+                    raise ValueError("Too many columns in CSV row")
+                critical_value = str(r.get("is_critical_flag", "")).strip().lower()
+                if critical_value not in ("true", "false", "1", "0", "yes", "no", ""):
+                    raise ValueError("Invalid is_critical_flag; expected true/false, 1/0, or yes/no")
                 payload = SystemTaskPayload(
                     task_id=r.get("task_id", "TASK-01"),
                     target_identifier=r.get("target_identifier", "TARGET-01"),
                     primary_metric=float(r.get("primary_metric", 15.0)),
                     secondary_metric=float(r.get("secondary_metric", 5.0)),
                     status_descriptor=r.get("status_descriptor", "NOMINAL"),
-                    is_critical_flag=str(r.get("is_critical_flag", "")).lower() in ("true", "1", "yes"),
+                    is_critical_flag=critical_value in ("true", "1", "yes"),
                 )
                 dossier = supervisor.process_task(payload)
                 row_dict = dict(r)
@@ -124,8 +136,8 @@ def main(argv=None):
                 writer = csv.DictWriter(f, fieldnames=out_fields)
                 writer.writeheader()
                 writer.writerows(out_rows)
-        except PermissionError:
-            print(f"Error: Permission denied writing '{args.output}'.", file=sys.stderr)
+        except (PermissionError, IsADirectoryError, OSError) as e:
+            print(f"Error: Could not write '{args.output}': {e}", file=sys.stderr)
             return 1
 
         print(f"Processed {len(out_rows)} records -> {args.output} ({errors} skipped)")
