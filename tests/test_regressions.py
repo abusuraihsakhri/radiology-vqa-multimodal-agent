@@ -113,3 +113,13 @@ def test_simulator_rejects_nonpositive_iterations():
     from simulator import run_simulation
     with pytest.raises(ValueError, match="positive"):
         run_simulation(0)
+
+
+def test_batch_prevents_overwriting_source_and_duplicate_headers(tmp_path):
+    source = tmp_path / "source.csv"
+    source.write_text("task_id,target_identifier,primary_metric\nT1,SYN-01,2\n", encoding="utf-8")
+    assert main(["batch", "-i", str(source), "-o", str(source)]) == 1
+    assert "T1,SYN-01,2" in source.read_text(encoding="utf-8")
+    duplicates = tmp_path / "duplicates.csv"
+    duplicates.write_text("task_id,task_id,target_identifier,primary_metric\nT1,T2,SYN-01,2\n", encoding="utf-8")
+    assert main(["batch", "-i", str(duplicates), "-o", str(tmp_path / "out.csv")]) == 1
