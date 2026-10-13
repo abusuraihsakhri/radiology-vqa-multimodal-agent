@@ -5,6 +5,7 @@ import argparse
 import csv
 import json
 import sys
+from pathlib import Path
 from agents.models import SystemTaskPayload
 from agents.supervisor import SystemSupervisor
 from agents.base import AuditLogger, SecurityException
@@ -80,6 +81,9 @@ def main(argv=None):
         return 0 if valid else 1
 
     if args.command == "batch":
+        if Path(args.input).resolve() == Path(args.output).resolve():
+            print("Error: Input and output paths must differ.", file=sys.stderr)
+            return 1
         try:
             with open(args.input, mode="r", encoding="utf-8-sig") as f:
                 reader = csv.DictReader(f)
@@ -97,6 +101,9 @@ def main(argv=None):
 
         if not fieldnames or any(not key for key in fieldnames):
             print("Error: CSV must have nonempty column headers.", file=sys.stderr)
+            return 1
+        if len(fieldnames) != len(set(fieldnames)):
+            print("Error: Duplicate CSV column headers are not supported.", file=sys.stderr)
             return 1
         required = {"task_id", "target_identifier", "primary_metric"}
         if not required.issubset(fieldnames):
