@@ -1,119 +1,75 @@
-# Radiology Vqa Multimodal Agent
+# Radiology VQA Multimodal Agent
 
-> **Domain:** Diagnostic Radiology & Medical Imaging AI  
-> **Reference Guidelines & Standards:** `American College of Radiology (ACR) RADS & Fleischner Society`
+A research prototype for **rule-based task evaluation** with a Python CLI, FastAPI service, and offline browser demonstration.
 
-<div align="center">
+**Important scope limitation:** Despite the historical repository name, this code does **not** load or interpret radiology images, compute vision-language embeddings, or answer image-grounded diagnostic questions. It evaluates supplied numbers and status descriptors against illustrative thresholds. It has not been clinically validated and must not be used for diagnosis, treatment, triage, or patient safety decisions.
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-![Python](https://img.shields.io/badge/Python-3.10%20%7C%203.11%20%7C%203.12-3776AB.svg?logo=python&logoColor=white)
-![FastAPI](https://img.shields.io/badge/FastAPI-0.111-009688.svg?logo=fastapi&logoColor=white)
-![Audit Trail](https://img.shields.io/badge/Audit-HMAC--SHA256_Tamper--Evident-brightgreen.svg)
-![Zero-PHI Guard](https://img.shields.io/badge/Guard-Zero--PHI_Outbound-blue.svg)
-![Docker](https://img.shields.io/badge/Docker-Ready-2496ED.svg?logo=docker&logoColor=white)
+## Try the browser demonstration
 
-</div>
+Open [docs/index.html](docs/index.html) locally in a browser, or view the page through a configured GitHub Pages publication. The interface operates entirely in-browser and does not require Python, Pyodide, a model, or a backend. It supports synthetic task entry, finite-number validation, textual results, and JSON export.
 
----
+The browser intentionally uses **deterministic JavaScript**, not the Python backend. It mirrors the three generic alert conditions implemented by `agents/workers.py`: primary metric >25, secondary metric >12 or a critical flag, and anomaly keywords in the descriptor. These are **arbitrary demonstration thresholds**, not ACR, Fleischner, ASPECTS, or other validated radiology criteria.
 
-## 📖 What It Does
+## Python setup
 
-Radiology Vqa Multimodal Agent
-
----
-
-## ⚙️ Key Capabilities & Algorithmic Modules
-
-- **Deterministic Calculation Engine**: Strict compliance with standard reference formulations and thresholds.
-- **Risk & Urgency Classification**: Multi-tier categorization with automated clinical/operational action recommendations.
-- **Validation & Guardrails**: Rigorous input bounds checking and anomaly detection.
-
----
-
-## 💻 CLI Quickstart & Usage
-
-### 1. Guided Interactive Mode
-```bash
-python cli.py
-```
-
-### 2. Direct Parameterized Evaluation
-```bash
-python cli.py --task-id <value> --target <value> --primary <value> --secondary <value>
-```
-
-### Parameter Reference
-- `--task-id`: Specifies input measurement or parameter value.
-- `--target`: Specifies input measurement or parameter value.
-- `--primary`: Specifies input measurement or parameter value.
-- `--secondary`: Specifies input measurement or parameter value.
-- `--critical`: Specifies input measurement or parameter value.
-- `--status`: Specifies input measurement or parameter value.
-- `--input`: Specifies input measurement or parameter value.
-- `--output`: Specifies input measurement or parameter value.
-
-### Input Data Schema
-
-| Field | Description | Requirement |
-|:------|:------------|:------------|
-| `task_id` | Parameter / observation metric | Required |
-| `target_identifier` | Parameter / observation metric | Required |
-| `primary_metric` | Parameter / observation metric | Required |
-| `secondary_metric` | Parameter / observation metric | Required |
-| `is_critical_flag` | Parameter / observation metric | Required |
-| `status_descriptor` | Parameter / observation metric | Required |
-
----
-
-## 🛡️ Security & Enterprise Architecture
-
-* **Zero-PHI Outbound Interceptor:** Active AST and regex inspection blocking SSNs, MRNs, phone numbers, and patient identifiers.
-* **Tamper-Evident HMAC-SHA256 Audit Trail:** Chained, cryptographically signed logs for every evaluation and state transition. Full signature verification on integrity checks.
-* **Secure Key Management:** HMAC secret key sourced from `AUDIT_SECRET_KEY` environment variable, with auto-generated secure random fallback for development.
-* **Input Validation:** All metric values validated for finite numbers (rejects NaN/Inf). String fields validated as non-empty.
-* **Error Resilience:** Batch processing handles file errors, permission issues, and malformed CSV data gracefully.
-* **Air-Gapped LLM Reasoning Adapter:** Agnostic integration for local Ollama instances (`llama3`, `mistral`), Claude 3.5 Sonnet, GPT-4o, and deterministic test mocks.
-* **Active Learning Bayesian Calibration:** Dynamic tracker updating worker reliability weights and monitoring Brier calibration drift.
-* **FastAPI & Prometheus Telemetry:** Exposes OpenAPI 3.1 REST endpoints and operational Prometheus metrics (`/metrics`).
-
----
-
-## 🧪 Testing & Verification
-
-Run the automated test suite:
+Python 3.10+ is required. From the repository root:
 
 ```bash
-pytest -v
-```
-
-Execute high-throughput batch simulation benchmarks:
-
-```bash
-python simulator.py 1000
-```
-
-Run batch processing from CSV:
-
-```bash
+python -m pip install -e ".[api,test]"
+python -m pytest -q
+python cli.py audit --task-id TEST-001 --target SYNTHETIC-01 --primary 30 --secondary 5 --status NOMINAL
 python cli.py batch -i sample.csv -o results.csv
+python cli.py verify-audit
+python cli.py chat "What is the system status?"
 ```
 
----
-
-## 🐳 Container Deployment
+The separately maintained `rad_vqa_agent` package has its own legacy interface:
 
 ```bash
-docker build -t radiology-vqa-multimodal-agent .
-docker run -p 8000:8000 radiology-vqa-multimodal-agent
+python -m rad_vqa_agent.cli audit --task-id TEST-002
 ```
 
----
+## Local API
 
-## 🔧 Configuration
+```bash
+python cli.py serve --host 127.0.0.1 --port 8000
+```
 
-| Environment Variable | Description | Default |
-|:---------------------|:------------|:--------|
-| `AUDIT_SECRET_KEY` | HMAC-SHA256 secret key for audit trail signing | Auto-generated secure random key per process |
-| `MODEL_PROVIDER` | LLM provider (`mock`, `ollama`, `claude`, `openai`) | `mock` |
+The primary FastAPI app (`agents.api:app`) provides `GET /health`, `GET /metrics`, `POST /api/audit`, `POST /api/chat`, and `GET /api/audit/logs`. OpenAPI UI is at `http://127.0.0.1:8000/docs`. The chat endpoint currently uses a **deterministic mock** rather than a medical or general-purpose language model. Non-mock model providers are not implemented and explicitly fail.
 
-**Security Note:** For production deployments, always set `AUDIT_SECRET_KEY` to a strong, unique value. Without it, a secure random key is generated per process (suitable for development/testing).
+An additional `rad_vqa_agent.server` FastAPI implementation exists for the legacy engine; its thresholds differ from the primary `agents` path.
+
+## Container deployment
+
+Generate a strong random key and make it available through the host environment before running:
+
+```bash
+export AUDIT_SECRET_KEY="$(python -c 'import secrets; print(secrets.token_hex(32))')"
+docker compose up --build
+```
+
+The Compose file requires `AUDIT_SECRET_KEY` and binds the API to loopback (`127.0.0.1:8000`) by default. Do not expose the API to untrusted networks: the example service does not implement authentication, access control, rate limits, or persistent storage.
+
+## Data handling and security
+
+- The browser demo makes no network requests, does not store data, and creates JSON downloads locally. Use **synthetic** data.
+- The Python application stores dossiers and HMAC-linked audit records **in process memory only**. Audits are not persistent or independently anchored, and the fallback key changes between processes if `AUDIT_SECRET_KEY` is unset.
+- The Python identifier filter blocks certain recognizable patterns (e.g., MRNs and email addresses), including text nested in metadata. It is **not** a complete PHI detector, a de-identification method, or evidence of HIPAA compliance.
+- The server is a development/research prototype. Do not send real patient information; use synthetic values exclusively.
+
+## Project layout
+
+- `agents/`: primary Pydantic models, rule workers, supervisor, HMAC audit chain, and FastAPI application.
+- `rad_vqa_agent/`: separate legacy coordinator and CLI.
+- `cli.py`: primary CLI for single-task, batch, chat, audit verification, and API server.
+- `enrichment.py`: independent experimental generic-threshold modules; their feature names do not imply implemented image analysis.
+- `docs/index.html`: static browser-only demonstration, compatible with GitHub Pages.
+- `web/index.html`: equivalent standalone demo for local use.
+- `tests/`: unit and regression tests.
+- `Dockerfile`, `docker-compose.yml`: local container deployment.
+
+## Development and compatibility
+
+The project uses Python (Pydantic v2, optional FastAPI/Uvicorn), HTML, and vanilla JavaScript. The static demo supports modern browsers with JavaScript enabled and does not require a browser Python runtime. GitHub Actions tests Python 3.10–3.13 and JavaScript syntax. No image inference model, DICOM pipeline, cloud model integration, or clinical validation dataset is included.
+
+Licensed under the [MIT License](LICENSE).
