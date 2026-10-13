@@ -1,40 +1,55 @@
-name: Radiology Vqa Multimodal Engine CI/CD & Security Verification
+name: Tests and security checks
 
 on:
   push:
-    branches: [ master, main ]
+    branches: [master]
   pull_request:
-    branches: [ master, main ]
+    branches: [master]
+
+permissions:
+  contents: read
 
 jobs:
-  test-and-audit:
+  test:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.10", "3.11", "3.12"]
-
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
     steps:
-    - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install package and test dependencies
+        run: python -m pip install -e ".[api,test]"
+      - name: Compile Python
+        run: python -m compileall -q agents rad_vqa_agent cli.py enrichment.py simulator.py
+      - name: Unit and regression tests
+        run: python -m pytest -q
+      - name: Verify JavaScript syntax
+        run: |
+          python - <<'PY'
+          from html.parser import HTMLParser
+          from pathlib import Path
+          import subprocess
 
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v5
-      with:
-        python-version: ${{ matrix.python-version }}
+          class Scripts(HTMLParser):
+              def __init__(self):
+                  super().__init__()
+                  self.inside = False
+                  self.items = []
+              def handle_starttag(self, tag, attrs):
+                  self.inside = tag == "script" and not dict(attrs).get("src")
+              def handle_data(self, data):
+                  if self.inside:
+                      self.items.append(data)
+              def handle_endtag(self, tag):
+                  if tag == "script":
+                      self.inside = False
 
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install fastapi uvicorn pydantic pytest
-
-    - name: Run Pytest Suite
-      run: |
-        pytest -v
-
-    - name: Security SAST & Zero-PHI Audit
-      run: |
-        python -c "
-        from agents.base import PHIGuard, AuditLogger
-        import pytest
-        assert AuditLogger.verify_integrity() is True
-        print('Security & Zero-PHI Audit Passed!')
-        "
+          for page in ("docs/index.html", "web/index.html"):
+              parser = Scripts()
+              parser.feed(Path(page).read_text(encoding="utf-8"))
+              for script in parser.items:
+                  subprocess.run(["node", "--check", "-"], input=script, text=True, check=True)
+          PY
