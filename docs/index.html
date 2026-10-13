@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>Radiology VQA Agent — Rule Engine Demo</title>
+<style>
+:root{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color-scheme:dark;color:#f3f6ff;background:#0b1220}
+*{box-sizing:border-box}
+body{margin:0;padding:clamp(1rem,3vw,2rem);max-width:1200px;margin-inline:auto;line-height:1.45}
+header{display:flex;justify-content:space-between;gap:1rem;align-items:start;margin-bottom:1.5rem;flex-wrap:wrap}
+h1{font-size:clamp(1.35rem,3vw,2rem);margin:0 0 .3rem}
+h2{font-size:1.15rem;margin:0 0 1rem}
+p{margin:.35rem 0;color:#b7c4d8}
+.tag{color:#a9ceff;background:#152946;border:1px solid #3e5c86;padding:.3rem .7rem;border-radius:999px;font-size:.85rem}
+.note{padding:.85rem 1rem;border-left:3px solid #89b4fa;background:#142139;border-radius:4px;margin-bottom:1.4rem}
+.layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr);gap:1rem}
+.panel{border:1px solid #344358;background:#152034;padding:1.2rem;border-radius:12px;min-width:0}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.85rem}
+.wide{grid-column:1/-1}
+label{display:block;color:#d2def0;font-size:.9rem;margin-bottom:.3rem}
+input{display:block;width:100%;background:#0a1729;border:1px solid #5a6c80;border-radius:7px;padding:.66rem .75rem;color:#fff;font:inherit}
+input:focus-visible,button:focus-visible{outline:3px solid #a6cdfb;outline-offset:2px}
+.check{display:flex;gap:.5rem;align-items:center}
+.check input{width:auto}
+.buttons{display:flex;gap:.7rem;flex-wrap:wrap;margin-top:1rem}
+button{font:inherit;border:1px solid #83b1f0;background:#2760a4;color:#fff;padding:.65rem 1rem;border-radius:7px;cursor:pointer;font-weight:600}
+button.secondary{background:#24354d;border-color:#62748c}
+button:hover{filter:brightness(1.14)}
+pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#0a1729;border:1px solid #344358;border-radius:8px;padding:1rem;color:#dceeff;min-height:260px;font-size:.85rem;line-height:1.45}
+.small{font-size:.84rem;color:#afbdd1;margin-top:.8rem}
+.status{font-weight:700;font-size:1.05rem;min-height:1.5rem;margin-bottom:.7rem}
+.status[data-type="critical"]{color:#ffa2a2}
+.status[data-type="elevated"]{color:#ffd17e}
+.status[data-type="routine"]{color:#9beac0}
+footer{font-size:.8rem;margin-top:1rem;color:#afbdd1}
+a{color:#a9ceff}
+@media(max-width:760px){.layout{grid-template-columns:1fr}.grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header>
+<div><h1>Radiology VQA Agent</h1><p>Rule-based task audit · browser demonstration</p></div>
+<span class="tag">Local processing · no server</span>
+</header>
+<div class="note" role="note"><strong>Research software, not a diagnostic device.</strong> This prototype evaluates generic numeric thresholds and text flags. It does <strong>not</strong> analyze CT/MRI/X-ray images, answer questions about images, apply validated clinical thresholds, or provide clinical decision support. Use synthetic identifiers only; never enter patient information.</div>
+<main class="layout">
+<section class="panel" aria-labelledby="form-heading">
+<h2 id="form-heading">Evaluate a synthetic task</h2>
+<form id="audit-form">
+<div class="grid">
+<div><label for="task-id">Task ID</label><input id="task-id" type="text" required maxlength="120" value="DEMO-001" autocomplete="off"></div>
+<div><label for="target-id">Synthetic target ID</label><input id="target-id" type="text" required maxlength="120" value="SYNTHETIC-01" autocomplete="off"></div>
+<div><label for="primary">Primary metric (demo threshold: 25)</label><input id="primary" type="number" step="any" required value="29.4"></div>
+<div><label for="secondary">Secondary metric (demo threshold: 12)</label><input id="secondary" type="number" step="any" required value="14.8"></div>
+<div class="wide"><label for="descriptor">Status descriptor</label><input id="descriptor" type="text" maxlength="200" required value="DISCORDANT" autocomplete="off"></div>
+<div class="wide"><label class="check" for="critical"><input id="critical" type="checkbox"> Mark synthetic critical flag</label></div>
+</div>
+<div class="buttons"><button type="submit">Evaluate</button><button class="secondary" id="download" type="button" disabled>Export JSON</button><button class="secondary" type="reset">Reset</button></div>
+</form>
+<p class="small">The rules mirror the <code>agents/workers.py</code> thresholds (25, 12, and descriptor keywords). These values are arbitrary demonstration parameters, not medical reference ranges.</p>
+</section>
+<section class="panel" aria-labelledby="result-heading">
+<h2 id="result-heading">Task evaluation</h2>
+<div id="status" class="status" aria-live="polite">No task evaluated</div>
+<pre id="result" aria-live="polite">Enter synthetic values and select Evaluate.</pre>
+<p id="count" class="small">Tasks evaluated this session: 0</p>
+</section>
+</main>
+<footer>No network calls, tracking, cookies, localStorage, or server-side audit signing are used in this demo. JSON exports are created locally in your browser. <a href="https://github.com/abusuraihsakhri/radiology-vqa-multimodal-agent">Source repository</a>.</footer>
+<script>
+(() => {
+  "use strict";
+  const form = document.getElementById("audit-form");
+  const output = document.getElementById("result");
+  const status = document.getElementById("status");
+  const count = document.getElementById("count");
+  const download = document.getElementById("download");
+  let evaluations = 0;
+  let lastResult = null;
+  const prohibitedIdentifier = /\b(?:MRN\s*[:#-]?\s*\d{4,10}|\d{3}-\d{2}-\d{4}|(?:Patient|DOB|Date of Birth)\s*[:#]\s*\S+|[\w.+-]+@[\w.-]+\.[A-Za-z]{2,})\b/i;
+  const anomalous = ["DISCORDANT", "ANOMALY", "MUTANT", "VIOLATION", "FAIL", "REJECT"];
+  form.addEventListener("submit", event => {
+    event.preventDefault();
+    const task_id = document.getElementById("task-id").value.trim();
+    const target_identifier = document.getElementById("target-id").value.trim();
+    const status_descriptor = document.getElementById("descriptor").value.trim();
+    const primaryRaw = document.getElementById("primary").value;
+    const secondaryRaw = document.getElementById("secondary").value;
+    const primary_metric = Number(primaryRaw);
+    const secondary_metric = Number(secondaryRaw);
+    const is_critical_flag = document.getElementById("critical").checked;
+    if (!task_id || !target_identifier || !status_descriptor ||
+        !primaryRaw.trim() || !secondaryRaw.trim() ||
+        !Number.isFinite(primary_metric) || !Number.isFinite(secondary_metric)) {
+      status.textContent = "Invalid input";
+      status.dataset.type = "";
+      output.textContent = "Supply nonempty synthetic identifiers, descriptor, and finite numeric values.";
+      return;
+    }
+    if ([task_id, target_identifier, status_descriptor].some(v => prohibitedIdentifier.test(v))) {
+      status.textContent = "Possible identifier detected";
+      status.dataset.type = "";
+      output.textContent = "Do not enter patient identifiers. Use synthetic values only.";
+      return;
+    }
+    const alerts = [];
+    if (primary_metric > 25) alerts.push({worker:"InvariantQCWorker",urgency:"ELEVATED_RISK",summary:"Primary metric exceeds demo threshold (25)"});
+    if (is_critical_flag || secondary_metric > 12) alerts.push({worker:"SafetyEscalationWorker",urgency:is_critical_flag?"CRITICAL_STAT_PANIC":"ELEVATED_RISK",summary:"Critical flag or secondary metric above demo threshold (12)"});
+    if (anomalous.some(term => status_descriptor.toUpperCase().includes(term))) alerts.push({worker:"ProtocolConformanceWorker",urgency:"ELEVATED_RISK",summary:"Descriptor matches configured anomaly keywords"});
+    const critical = alerts.some(a => a.urgency === "CRITICAL_STAT_PANIC");
+    const overall_urgency = critical ? "CRITICAL_STAT_PANIC" : alerts.length ? "ELEVATED_RISK" : "ROUTINE";
+    const integrity_status = critical ? "RECALIBRATION_REQUIRED" : alerts.length ? "DISCORDANT_ANOMALY" : "VALIDATED_OPTIMAL";
+    lastResult = {system:"radiology-vqa-multimodal-agent",mode:"browser-rule-demo",task_id,target_identifier,primary_metric,secondary_metric,status_descriptor,is_critical_flag,overall_urgency,integrity_status,total_alerts:alerts.length,critical_alerts_count:alerts.filter(a=>a.urgency==="CRITICAL_STAT_PANIC").length,alerts,clinical_validation:false,imaging_analysis:false};
+    status.textContent = overall_urgency.replaceAll("_"," ");
+    status.dataset.type = critical ? "critical" : alerts.length ? "elevated" : "routine";
+    output.textContent = JSON.stringify(lastResult,null,2);
+    download.disabled = false;
+    evaluations++;
+    count.textContent = "Tasks evaluated this session: " + evaluations;
+  });
+  form.addEventListener("reset", () => {
+    lastResult = null;
+    download.disabled = true;
+    status.textContent = "No task evaluated";
+    status.dataset.type = "";
+    output.textContent = "Enter synthetic values and select Evaluate.";
+  });
+  download.addEventListener("click", () => {
+    if (!lastResult) return;
+    const url = URL.createObjectURL(new Blob([JSON.stringify(lastResult,null,2)+"\n"],{type:"application/json"}));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "radiology-vqa-demo-result.json";
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  });
+})();
+</script>
+</body>
+</html>
