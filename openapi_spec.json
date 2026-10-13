@@ -1,112 +1,130 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "Radiology Vqa Multimodal Engine API",
-    "description": "Enterprise Distributed Component Platform (Clinical & Cryptographic AI) adhering to CAP / CLSI / NIST Standards.",
-    "version": "3.0.0-ENTERPRISE",
-    "contact": {
-      "name": "Dr. Abu Suraih Sakhri",
-      "url": "https://github.com/abusuraihsakhri"
-    }
+    "title": "Radiology VQA Multimodal Agent — Rule-Based Demo API",
+    "version": "3.0.0",
+    "description": "Generic numerical/descriptor rule evaluation. No image analysis, patient decision support, validated thresholds, or real language-model inference."
   },
   "paths": {
     "/health": {
       "get": {
-        "summary": "Health and metadata check",
+        "summary": "Service health",
         "responses": {
           "200": {
-            "description": "System optimal"
+            "description": "Status and metadata JSON"
           }
         }
       }
     },
     "/metrics": {
       "get": {
-        "summary": "Prometheus operational metrics",
+        "summary": "In-memory counters (JSON, not Prometheus text)",
         "responses": {
           "200": {
-            "description": "Prometheus text metrics"
+            "description": "JSON counts"
           }
         }
       }
     },
     "/api/audit": {
       "post": {
-        "summary": "Dispatch task payload across specialized workers",
+        "summary": "Evaluate a synthetic task",
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "type": "object",
-                "properties": {
-                  "task_id": {
-                    "type": "string"
-                  },
-                  "target_identifier": {
-                    "type": "string"
-                  },
-                  "primary_metric": {
-                    "type": "number"
-                  },
-                  "secondary_metric": {
-                    "type": "number"
-                  },
-                  "status_descriptor": {
-                    "type": "string"
-                  },
-                  "is_critical_flag": {
-                    "type": "boolean"
-                  }
-                },
                 "required": [
                   "task_id",
                   "target_identifier",
                   "primary_metric"
-                ]
+                ],
+                "properties": {
+                  "task_id": {
+                    "type": "string",
+                    "description": "Synthetic task ID"
+                  },
+                  "target_identifier": {
+                    "type": "string",
+                    "description": "Synthetic target ID"
+                  },
+                  "primary_metric": {
+                    "type": "number",
+                    "description": "Illustrative threshold: 25"
+                  },
+                  "secondary_metric": {
+                    "type": "number",
+                    "default": 0,
+                    "description": "Illustrative threshold: 12"
+                  },
+                  "status_descriptor": {
+                    "type": "string",
+                    "default": "NOMINAL"
+                  },
+                  "is_critical_flag": {
+                    "type": "boolean",
+                    "default": false
+                  },
+                  "attributes": {
+                    "type": "object",
+                    "additionalProperties": true
+                  }
+                }
               }
             }
           }
         },
         "responses": {
           "200": {
-            "description": "Consensus dossier with HMAC signature"
+            "description": "Rule-based dossier"
+          },
+          "400": {
+            "description": "Potential identifier detected"
+          },
+          "422": {
+            "description": "Input validation error"
           }
         }
       }
     },
     "/api/chat": {
       "post": {
-        "summary": "Air-gapped supervisory conversational assistant",
+        "summary": "Deterministic mock response",
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "type": "object",
+                "required": [
+                  "query"
+                ],
                 "properties": {
                   "query": {
                     "type": "string"
                   }
-                },
-                "required": [
-                  "query"
-                ]
+                }
               }
             }
           }
         },
         "responses": {
           "200": {
-            "description": "Supervisory response"
+            "description": "Mock response"
+          },
+          "400": {
+            "description": "Potential identifier detected"
           }
         }
       }
     },
     "/api/audit/logs": {
       "get": {
-        "summary": "Retrieve and cryptographically verify HMAC audit trail",
+        "summary": "Inspect volatile audit chain",
         "responses": {
           "200": {
-            "description": "Cryptographic audit trail"
+            "description": "Audit block metadata and chain-verification result"
           }
         }
       }
