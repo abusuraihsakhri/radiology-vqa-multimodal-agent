@@ -22,7 +22,7 @@ class ChatRequest(BaseModel):
 
 @app.get("/health")
 def health():
-    return {"status": "HEALTHY", "service": "radiology-vqa-multimodal-agent", "domain": "Radiology & Neuroimaging Systems", "standard": "ACR RADS / Fleischner Society / ASPECTS Guidelines", "version": "3.0.0-ENTERPRISE"}
+    return {"status": "HEALTHY", "service": "radiology-vqa-multimodal-agent", "domain": "Rule-based research demonstration", "standard": "Illustrative thresholds only; not clinically validated", "version": "3.0.0-ENTERPRISE"}
 
 
 @app.get("/metrics")
